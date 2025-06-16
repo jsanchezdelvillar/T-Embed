@@ -1,10 +1,26 @@
 #include "menu_system.h"
 #include "settings_manager.h"
 #include "ble_scanner.h"
+#include "mqtt_client.h"
 #include <TFT_eSPI.h>
 #include <RotaryEncoder.h>
 #include <vector>
 
+// --- Watering device list (hardcoded for now) ---
+const char* wateringDevices[] = { "Front Lawn", "Back Garden" };
+const int wateringDeviceCount = sizeof(wateringDevices) / sizeof(wateringDevices[0]);
+
+// Forward declarations
+void buildMenu();
+void drawMenu();
+void selectItem();
+void goBack();
+void showBLEDevices();
+void showHAMenu();
+void buildRiegoMenu();
+void buildWateringDeviceMenu(int index);
+
+// Menu system
 TFT_eSPI tft = TFT_eSPI();
 RotaryEncoder encoder(34, 35, RotaryEncoder::LatchMode::TWO03);
 int lastPos = -1;
@@ -21,14 +37,70 @@ std::vector<MenuItem> currentMenu;
 std::vector<std::vector<MenuItem>> menuStack;
 int selectedIndex = 0;
 
-// Forward declarations
-void drawMenu();
-void selectItem();
-void goBack();
-void showBLEDevices();
-void showHAMenu();
-void showRiegoMenu();
+// --- Watering Device Actions ---
+void startWatering(int deviceIdx) {
+  String topic = String("ha/riego/") + wateringDevices[deviceIdx] + "/set";
+  MQTTClient::publish(topic.c_str(), "start");
+  tft.fillScreen(TFT_BLACK);
+  tft.drawString("Started!", 10, 20, 2);
+  delay(1000);
+  goBack();
+}
 
+void delayWatering(int deviceIdx) {
+  String topic = String("ha/riego/") + wateringDevices[deviceIdx] + "/set";
+  MQTTClient::publish(topic.c_str(), "delay");
+  tft.fillScreen(TFT_BLACK);
+  tft.drawString("Delayed 1 day!", 10, 20, 2);
+  delay(1000);
+  goBack();
+}
+
+// --- Submenu builders ---
+void buildWateringDeviceMenu(int deviceIdx) {
+  MenuItem backOption = { "< Back", {}, goBack };
+  MenuItem startOption = { "Start", {}, [deviceIdx]() { startWatering(deviceIdx); } };
+  MenuItem delayOption = { "Delay 1 day", {}, [deviceIdx]() { delayWatering(deviceIdx); } };
+  std::vector<MenuItem> deviceMenu = { startOption, delayOption, backOption };
+  menuStack.push_back(currentMenu);
+  currentMenu = deviceMenu;
+  selectedIndex = 0;
+  drawMenu();
+}
+
+void buildRiegoMenu() {
+  MenuItem backOption = { "< Back", {}, goBack };
+  std::vector<MenuItem> riegoMenu;
+  for (int i = 0; i < wateringDeviceCount; ++i) {
+    riegoMenu.push_back({ wateringDevices[i], {}, [i]() { buildWateringDeviceMenu(i); } });
+  }
+  riegoMenu.push_back(backOption);
+  menuStack.push_back(currentMenu);
+  currentMenu = riegoMenu;
+  selectedIndex = 0;
+  drawMenu();
+}
+
+// --- BLE Devices menu ---
+void showBLEDevices() {
+  tft.fillScreen(TFT_BLACK);
+  const auto& devices = BLEScanner::getDevices();
+  int y = 20;
+  for (const auto& dev : devices) {
+    tft.drawString(dev, 10, y, 2);
+    y += 20;
+    if (y > 220) break;
+  }
+  delay(2000); // Show for 2 seconds, then go back
+  goBack();
+}
+
+// --- HA menu (currently just redraw) ---
+void showHAMenu() {
+  drawMenu();
+}
+
+// --- Menu navigation ---
 void drawMenu() {
   tft.fillScreen(TFT_BLACK);
   for (int i = 0; i < currentMenu.size(); ++i) {
@@ -62,49 +134,27 @@ void goBack() {
   }
 }
 
-void showBLEDevices() {
-  tft.fillScreen(TFT_BLACK);
-  const auto& devices = BLEScanner::getDevices();
-  int y = 20;
-  for (const auto& dev : devices) {
-    tft.drawString(dev, 10, y, 2);
-    y += 20;
-    if (y > 220) break;
-  }
-  delay(2000); // Show for 2 seconds, then go back
-  goBack();
-}
-
-void showHAMenu() {
-  // Placeholder for HA menu display logic
-  drawMenu();
-}
-
-void showRiegoMenu() {
-  tft.fillScreen(TFT_BLACK);
-  tft.drawString("Riego setup coming soon", 10, 20, 2);
-  delay(2000);
-  goBack();
-}
-
+// --- Root menu builder ---
 void buildMenu() {
-  MenuItem wifiSettings = { "WiFi", {}, []() {
+  MenuItem backOption = { "< Back", {}, goBack };
+
+  // Riego menu (dynamic)
+  MenuItem haRiego = { "Riego", {backOption}, buildRiegoMenu };
+  MenuItem haMenu = { "HA", { haRiego, backOption }, showHAMenu };
+
+  // Settings submenu
+  MenuItem wifiSettings = { "WiFi", {backOption}, []() {
     tft.fillScreen(TFT_BLACK);
     tft.drawString("WiFi config coming", 10, 20, 2);
     delay(2000);
     goBack();
   }};
-  MenuItem mqttSettings = { "MQTT", {}, []() {
+  MenuItem mqttSettings = { "MQTT", {backOption}, []() {
     tft.fillScreen(TFT_BLACK);
     tft.drawString("MQTT config coming", 10, 20, 2);
     delay(2000);
     goBack();
   }};
-  MenuItem bleStatus = { "BLE Devices", {}, showBLEDevices };
-  MenuItem haRiego = { "Riego", {}, showRiegoMenu };
-  MenuItem haMenu = { "HA", { haRiego }, showHAMenu };
-  MenuItem backOption = { "< Back", {}, goBack };
-
   MenuItem settings = {
     "Settings",
     {
@@ -113,6 +163,8 @@ void buildMenu() {
       backOption
     }
   };
+
+  MenuItem bleStatus = { "BLE Devices", {backOption}, showBLEDevices };
 
   MenuItem root = {
     "Main Menu",
@@ -126,10 +178,12 @@ void buildMenu() {
   currentMenu = root.subitems;
 }
 
+// --- Button interrupt handler ---
 void IRAM_ATTR handleButton() {
   buttonPressed = true;
 }
 
+// --- Public API ---
 void MenuSystem::begin() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(BUTTON_PIN, handleButton, FALLING);
