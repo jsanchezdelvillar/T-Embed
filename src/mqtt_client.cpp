@@ -7,10 +7,10 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 
 void MQTTClient::begin() {
-  WiFi.begin("WIFI_SSID", "WIFI_PASS");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) delay(500);
 
-  client.setServer("MQTT_BROKER", MQTT_PORT);
+  client.setServer(MQTT_BROKER, MQTT_PORT);
   while (!client.connected()) {
     client.connect("t_embed_ble_proxy");
   }
