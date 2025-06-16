@@ -1,1 +1,7 @@
+# PlatformIO, Arduino, and VSCode files
+.pio/
+.vscode/
+.DS_Store
+
+# Ignore user-specific config
 src/config.h
