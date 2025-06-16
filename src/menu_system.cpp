@@ -1,5 +1,6 @@
 #include "menu_system.h"
 #include "settings_manager.h"
+#include "ble_scanner.h"
 #include <TFT_eSPI.h>
 #include <RotaryEncoder.h>
 #include <vector>
@@ -19,6 +20,14 @@ struct MenuItem {
 std::vector<MenuItem> currentMenu;
 std::vector<std::vector<MenuItem>> menuStack;
 int selectedIndex = 0;
+
+// Forward declarations
+void drawMenu();
+void selectItem();
+void goBack();
+void showBLEDevices();
+void showHAMenu();
+void showRiegoMenu();
 
 void drawMenu() {
   tft.fillScreen(TFT_BLACK);
@@ -53,17 +62,48 @@ void goBack() {
   }
 }
 
+void showBLEDevices() {
+  tft.fillScreen(TFT_BLACK);
+  const auto& devices = BLEScanner::getDevices();
+  int y = 20;
+  for (const auto& dev : devices) {
+    tft.drawString(dev, 10, y, 2);
+    y += 20;
+    if (y > 220) break;
+  }
+  delay(2000); // Show for 2 seconds, then go back
+  goBack();
+}
+
+void showHAMenu() {
+  // Placeholder for HA menu display logic
+  drawMenu();
+}
+
+void showRiegoMenu() {
+  tft.fillScreen(TFT_BLACK);
+  tft.drawString("Riego setup coming soon", 10, 20, 2);
+  delay(2000);
+  goBack();
+}
+
 void buildMenu() {
   MenuItem wifiSettings = { "WiFi", {}, []() {
-    // Placeholder for WiFi config logic
+    tft.fillScreen(TFT_BLACK);
+    tft.drawString("WiFi config coming", 10, 20, 2);
+    delay(2000);
+    goBack();
   }};
   MenuItem mqttSettings = { "MQTT", {}, []() {
-    // Placeholder for MQTT config logic
+    tft.fillScreen(TFT_BLACK);
+    tft.drawString("MQTT config coming", 10, 20, 2);
+    delay(2000);
+    goBack();
   }};
-  MenuItem bleStatus = { "BLE Devices", {}, []() {
-    // Placeholder for BLE status screen
-  }};
-  MenuItem backOption = { "< Back", {}, []() { goBack(); } };
+  MenuItem bleStatus = { "BLE Devices", {}, showBLEDevices };
+  MenuItem haRiego = { "Riego", {}, showRiegoMenu };
+  MenuItem haMenu = { "HA", { haRiego }, showHAMenu };
+  MenuItem backOption = { "< Back", {}, goBack };
 
   MenuItem settings = {
     "Settings",
@@ -78,7 +118,8 @@ void buildMenu() {
     "Main Menu",
     {
       bleStatus,
-      settings
+      settings,
+      haMenu
     }
   };
 
