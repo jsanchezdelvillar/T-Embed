@@ -33,6 +33,56 @@ globals:
     restore_value: no
     initial_value: '0'   # 0 = menu, 1 = BLE page
 
+# --- Settings (Persistent) ---
+switch:
+  - platform: template
+    name: "Sound On/Off"
+    id: sound_on_off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+number:
+  - platform: template
+    name: "FrontLawn Delay"
+    id: frontlawn_delay
+    min_value: 0
+    max_value: 72
+    step: 1
+    initial_value: 0
+    unit_of_measurement: h
+    restore_value: true
+    optimistic: true
+  - platform: template
+    name: "BackLawn Delay"
+    id: backlawn_delay
+    min_value: 0
+    max_value: 72
+    step: 1
+    initial_value: 0
+    unit_of_measurement: h
+    restore_value: true
+    optimistic: true
+  - platform: template
+    name: "Volume"
+    id: volume_setting
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 50
+    restore_value: true
+    optimistic: true
+
+# --- Buzzer/Speaker ---
+output:
+  - platform: ledc
+    pin: GPIO7  # Speaker Pin per your pinout image
+    id: speaker_out
+
+buzzer:
+  - id: beeper
+    output: speaker_out
+
 light:
   - platform: apa102
     id: ring_leds
@@ -155,6 +205,15 @@ binary_sensor:
     name: "Encoder Button"
     on_press:
       then:
+        - if:
+            condition:
+              switch.is_on: sound_on_off
+            then:
+              - buzzer.beep:
+                  id: beeper
+                  frequency: 2000 Hz
+                  time_on: 50ms
+                  volume: !lambda 'return id(volume_setting).state / 100.0;'
         - lambda: |-
             if (id(menu_page) == 0 && display_menu.is_on_ble_menu()) {
               id(menu_page) = 1;    // Show BLE page
@@ -163,24 +222,6 @@ binary_sensor:
             } else {
               display.menu_select;
             }
-
-number:
-  - platform: template
-    name: "FrontLawn Delay"
-    id: frontlawn_delay
-    min_value: 0
-    max_value: 72
-    step: 1
-    initial_value: 0
-    unit_of_measurement: h
-  - platform: template
-    name: "BackLawn Delay"
-    id: backlawn_delay
-    min_value: 0
-    max_value: 72
-    step: 1
-    initial_value: 0
-    unit_of_measurement: h
 
 button:
   - platform: template
@@ -220,6 +261,18 @@ display_menu:
   id: menu
   display_id: st7789v_display
   main_menu:
+    - type: submenu
+      text: "Settings"
+      id: settings_menu
+      submenu:
+        - type: switch
+          name: "Sound"
+          id: sound_on_off
+        - type: number
+          name: "Volume"
+          id: volume_setting
+        - type: back
+          text: "Back"
     - type: submenu
       text: "BLE"
       id: ble_menu
