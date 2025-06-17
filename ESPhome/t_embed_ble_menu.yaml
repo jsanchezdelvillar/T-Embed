@@ -1,0 +1,207 @@
+esphome:
+  name: t_embed
+  includes:
+    - custom_ble_list.h
+
+esp32:
+  board: esp32-s3-devkitm-1
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+ota:
+logger:
+
+esp32_ble_tracker:
+
+font:
+  - file: "gfonts://Roboto"
+    id: font
+    size: 18
+
+globals:
+  - id: menu_page
+    type: int
+    restore_value: no
+    initial_value: '0'   # 0 = menu, 1 = BLE page
+
+display:
+  - platform: st7789v
+    id: st7789v_display
+    cs_pin: GPIO5
+    dc_pin: GPIO4
+    reset_pin: GPIO2
+    rotation: 90
+    lambda: |-
+      if (id(menu_page) == 1) {
+        id(custom_ble_list_display).draw(it);
+      } else {
+        it.printf(10, 10, id(font), "Press BLE in menu!");
+      }
+
+custom_component:
+  - lambda: |-
+      auto my_ble_list = new CustomBLEListDisplay(id(font));
+      App.register_component(my_ble_list);
+      id(custom_ble_list_display) = my_ble_list;
+      register_ble_list_display(my_ble_list);
+
+rotary_encoder:
+  - id: encoder
+    pin_a: GPIO34
+    pin_b: GPIO35
+    min_value: 0
+    max_value: 50
+    on_clockwise:
+      then:
+        - lambda: |-
+            if (id(menu_page) == 1) {
+              id(custom_ble_list_display)->scroll(+1);
+            } else {
+              display.menu_next;
+            }
+    on_anticlockwise:
+      then:
+        - lambda: |-
+            if (id(menu_page) == 1) {
+              id(custom_ble_list_display)->scroll(-1);
+            } else {
+              display.menu_previous;
+            }
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      inverted: true
+    name: "Encoder Button"
+    on_press:
+      then:
+        - lambda: |-
+            if (id(menu_page) == 0 && display_menu.is_on_ble_menu()) {
+              id(menu_page) = 1;    // Show BLE page
+            } else if (id(menu_page) == 1) {
+              id(menu_page) = 0;    // Go back to main menu
+            } else {
+              display.menu_select;
+            }
+
+number:
+  - platform: template
+    name: "FrontLawn Delay"
+    id: frontlawn_delay
+    min_value: 0
+    max_value: 72
+    step: 1
+    initial_value: 0
+    unit_of_measurement: h
+  - platform: template
+    name: "BackLawn Delay"
+    id: backlawn_delay
+    min_value: 0
+    max_value: 72
+    step: 1
+    initial_value: 0
+    unit_of_measurement: h
+
+button:
+  - platform: template
+    name: "FrontLawn Start"
+    id: start_frontlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.start_frontlawn
+  - platform: template
+    name: "BackLawn Start"
+    id: start_backlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.start_backlawn
+  - platform: template
+    name: "FrontLawn Delay"
+    id: delay_frontlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.delay_frontlawn
+            data:
+              hours: !lambda 'return id(frontlawn_delay).state;'
+  - platform: template
+    name: "BackLawn Delay"
+    id: delay_backlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.delay_backlawn
+            data:
+              hours: !lambda 'return id(backlawn_delay).state;'
+
+display_menu:
+  id: menu
+  display_id: st7789v_display
+  main_menu:
+    - type: submenu
+      text: "WiFi"
+      id: wifi_menu
+      submenu:
+        - type: text
+          name: "SSID"
+          id: wifi_ssid_var
+        - type: text
+          name: "Pass"
+          id: wifi_pass_var
+        - type: back
+          text: "Back"
+    - type: submenu
+      text: "BLE"
+      id: ble_menu
+      submenu:
+        - type: custom
+          text: "Show Devices"
+          on_enter:
+            - lambda: |-
+                id(menu_page) = 1;
+        - type: back
+          text: "Back"
+    - type: submenu
+      text: "Riego"
+      id: riego_menu
+      submenu:
+        - type: submenu
+          text: "FrontLawn"
+          id: frontlawn_menu
+          submenu:
+            - type: button
+              name: "Start"
+              id: start_frontlawn
+            - type: number
+              name: "Delay"
+              id: frontlawn_delay
+            - type: button
+              name: "Apply Delay"
+              id: delay_frontlawn
+            - type: back
+              text: "Back"
+        - type: submenu
+          text: "BackLawn"
+          id: backlawn_menu
+          submenu:
+            - type: button
+              name: "Start"
+              id: start_backlawn
+            - type: number
+              name: "Delay"
+              id: backlawn_delay
+            - type: button
+              name: "Apply Delay"
+              id: delay_backlawn
+            - type: back
+              text: "Back"
+        - type: back
+          text: "Back"
