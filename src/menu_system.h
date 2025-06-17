@@ -1,6 +1,7 @@
 #pragma once
 
-namespace MenuSystem {
-  void begin();
-  void update();
-}
+class MenuSystem {
+public:
+    void begin();
+    void update();
+};
