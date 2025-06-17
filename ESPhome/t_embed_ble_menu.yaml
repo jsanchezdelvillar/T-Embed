@@ -32,10 +32,13 @@ globals:
 display:
   - platform: st7789v
     id: st7789v_display
-    cs_pin: GPIO5
-    dc_pin: GPIO4
-    reset_pin: GPIO2
+    cs_pin: GPIO10
+    dc_pin: GPIO13
+    reset_pin: GPIO9
+    backlight_pin: GPIO15
     rotation: 90
+    data_pins: [GPIO11]         # MOSI
+    clk_pin: GPIO12             # SCLK
     lambda: |-
       if (id(menu_page) == 1) {
         id(custom_ble_list_display).draw(it);
@@ -52,8 +55,8 @@ custom_component:
 
 rotary_encoder:
   - id: encoder
-    pin_a: GPIO34
-    pin_b: GPIO35
+    pin_a: GPIO2
+    pin_b: GPIO1
     min_value: 0
     max_value: 50
     on_clockwise:
