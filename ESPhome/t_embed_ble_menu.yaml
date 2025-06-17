@@ -2,6 +2,10 @@ esphome:
   name: t_embed
   includes:
     - custom_ble_list.h
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: startup_sequence
 
 esp32:
   board: esp32-s3-devkitm-1
@@ -28,6 +32,73 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'   # 0 = menu, 1 = BLE page
+
+light:
+  - platform: apa102
+    id: ring_leds
+    num_leds: 7
+    data_pin: GPIO42
+    clock_pin: GPIO45
+    rgb_order: BGR
+    name: "Ring LEDs"
+    restore_mode: ALWAYS_OFF
+
+script:
+  - id: startup_sequence
+    mode: queued
+    then:
+      - lambda: |-
+          // ---- CONNECTING TO WIFI: GREEN ----
+          id(st7789v_display).fill(COLOR_BLACK);
+          id(st7789v_display).printf(10, 80, id(font), COLOR_GREEN, "Connecting to WiFi...");
+          id(st7789v_display).update();
+
+          for (int frame = 0; frame < 28; ++frame) {  // 4 rotations
+            std::vector<Color> pixels(7, Color(0, 32, 0));  // dim green base
+            int l = frame % 7;
+            for (int offset = 0; offset < 4; ++offset) {
+              int idxp = (l + offset) % 7;
+              int idxn = (l - offset + 7) % 7;
+              uint8_t intensity = 32 + offset * 32; // 32, 64, 96, 128
+              pixels[idxp] = Color(0, intensity, 0);
+              pixels[idxn] = Color(0, intensity, 0);
+            }
+            id(ring_leds).get_light(0)->call_set_leds_raw(pixels);
+            id(ring_leds).update();
+            delay(50);
+          }
+
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 15s
+
+      - lambda: |-
+          // ---- SEARCHING FOR BLE DEVICES: BLUE ----
+          id(st7789v_display).fill(COLOR_BLACK);
+          id(st7789v_display).printf(10, 80, id(font), COLOR_BLUE, "Searching for BLE devices...");
+          id(st7789v_display).update();
+
+          for (int frame = 0; frame < 28; ++frame) {
+            std::vector<Color> pixels(7, Color(0, 0, 32));  // dim blue base
+            int l = frame % 7;
+            for (int offset = 0; offset < 4; ++offset) {
+              int idxp = (l + offset) % 7;
+              int idxn = (l - offset + 7) % 7;
+              uint8_t intensity = 32 + offset * 32; // 32, 64, 96, 128
+              pixels[idxp] = Color(0, 0, intensity);
+              pixels[idxn] = Color(0, 0, intensity);
+            }
+            id(ring_leds).get_light(0)->call_set_leds_raw(pixels);
+            id(ring_leds).update();
+            delay(50);
+          }
+
+      - lambda: |-
+          // Clear LEDs after startup
+          std::vector<Color> pixels(7, Color(0, 0, 0));
+          id(ring_leds).get_light(0)->call_set_leds_raw(pixels);
+          id(ring_leds).update();
 
 display:
   - platform: st7789v
@@ -149,18 +220,6 @@ display_menu:
   id: menu
   display_id: st7789v_display
   main_menu:
-    - type: submenu
-      text: "WiFi"
-      id: wifi_menu
-      submenu:
-        - type: text
-          name: "SSID"
-          id: wifi_ssid_var
-        - type: text
-          name: "Pass"
-          id: wifi_pass_var
-        - type: back
-          text: "Back"
     - type: submenu
       text: "BLE"
       id: ble_menu
