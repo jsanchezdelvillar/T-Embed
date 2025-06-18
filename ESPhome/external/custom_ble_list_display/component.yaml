@@ -1,0 +1,3 @@
+esphome:
+  name: custom_ble_list_display
+  min_version: 2022.6.0
