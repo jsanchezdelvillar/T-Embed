@@ -187,7 +187,7 @@ display:
     rotation: 90
     lambda: |-
       if (id(menu_page) == 1) {
-        id(custom_ble_list_display).draw(it);
+        id(my_ble_list_display).draw(it);
       } else {
         it.printf(10, 10, id(main_font), "Press BLE in menu!");
       }
@@ -211,7 +211,7 @@ sensor:
       then:
         - lambda: |-
             if (id(menu_page) == 1) {
-              id(custom_ble_list_display)->scroll(+1);
+              id(my_ble_list_display)->scroll(+1);
             } else {
               menu_main_menu.next();
             }
@@ -219,7 +219,7 @@ sensor:
       then:
         - lambda: |-
             if (id(menu_page) == 1) {
-              id(custom_ble_list_display)->scroll(-1);
+              id(my_ble_list_display)->scroll(-1);
             } else {
               menu_main_menu.previous();
             }
