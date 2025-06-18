@@ -1,6 +1,5 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import display
 from esphome.const import CONF_ID
 
 CONF_FONT_ID = "font_id"
@@ -11,10 +10,13 @@ CustomBLEListDisplay = custom_ble_list_display_ns.class_(
     'CustomBLEListDisplay', cg.Component
 )
 
+Font = cg.esphome_ns.class_('Font')
+DisplayBuffer = cg.esphome_ns.class_('DisplayBuffer')
+
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CustomBLEListDisplay),
-    cv.Required(CONF_FONT_ID): cv.use_id(display.Font),
-    cv.Required(CONF_DISPLAY_ID): cv.use_id(display.DisplayBuffer),
+    cv.Required(CONF_FONT_ID): cv.use_id(Font),
+    cv.Required(CONF_DISPLAY_ID): cv.use_id(DisplayBuffer),
 })
 
 async def to_code(config):
