@@ -1,0 +1,358 @@
+external_components:
+  - source:
+      type: local
+      path: external
+      
+esphome:
+  name: t-embed
+  friendly_name: T-Embed
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: startup_sequence
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+logger:
+
+api:
+  encryption:
+    key: "J+V1b/x/WpYyeZaj+ANqavTCZGXZVmnB3H6zXw618OE="
+
+ota:
+  - platform: esphome
+    password: "773fd42046ac050b7a6c4dabdf5d6a87"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: "T-Embed Fallback Hotspot"
+    password: "3b9KZ9hwTm9J"
+
+captive_portal:
+
+esp32_ble_tracker:
+
+font:
+  - file: "gfonts://Roboto"
+    id: main_font
+    size: 18
+
+custom_ble_list_display:
+  id: custom_ble_list_display
+  font_id: main_font
+  display_id: st7789v_display
+
+globals:
+  - id: menu_page
+    type: int
+    restore_value: no
+    initial_value: '0'   # 0 = menu, 1 = BLE page
+
+switch:
+  - platform: template
+    name: "Sound On/Off"
+    id: sound_on_off
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+
+number:
+  - platform: template
+    name: "FrontLawn Delay"
+    id: frontlawn_delay
+    min_value: 0
+    max_value: 72
+    step: 1
+    initial_value: 0
+    unit_of_measurement: h
+    restore_value: true
+    optimistic: true
+  - platform: template
+    name: "BackLawn Delay"
+    id: backlawn_delay
+    min_value: 0
+    max_value: 72
+    step: 1
+    initial_value: 0
+    unit_of_measurement: h
+    restore_value: true
+    optimistic: true
+  - platform: template
+    name: "Volume"
+    id: volume_setting
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 50
+    restore_value: true
+    optimistic: true
+
+output:
+  - platform: ledc
+    pin: GPIO7
+    id: speaker_out
+    frequency: 2000 Hz
+
+script:
+  - id: beep_script
+    mode: restart
+    then:
+      - if:
+          condition:
+            switch.is_on: sound_on_off
+          then:
+            - output.set_level:
+                id: speaker_out
+                level: !lambda 'return (id(volume_setting).state * 0.003);'
+            - output.turn_on: speaker_out
+            - delay: 50ms
+            - output.turn_off: speaker_out
+
+  - id: startup_sequence
+    mode: queued
+    then:
+      - lambda: |-
+          id(st7789v_display).fill(Color::black);
+          id(st7789v_display).printf(10, 80, id(main_font), Color::green, "Connecting to WiFi...");
+          id(st7789v_display).update();
+
+          for (int frame = 0; frame < 28; ++frame) {  // 4 rotations
+            std::vector<Color> pixels(7, Color(0, 32, 0));  // dim green base
+            int l = frame % 7;
+            for (int offset = 0; offset < 4; ++offset) {
+              int idxp = (l + offset) % 7;
+              int idxn = (l - offset + 7) % 7;
+              uint8_t intensity = 32 + offset * 32; // 32, 64, 96, 128
+              pixels[idxp] = Color(0, intensity, 0);
+              pixels[idxn] = Color(0, intensity, 0);
+            }
+            id(ring_leds).state = pixels;
+            id(ring_leds).update_internal_();
+            delay(50);
+          }
+
+      - wait_until:
+          condition:
+            wifi.connected:
+          timeout: 15s
+
+      - lambda: |-
+          id(st7789v_display).fill(Color::(Color::black);
+          id(st7789v_display).printf(10, 80, id(main_font), Color::blue, "Searching for BLE devices...");
+          id(st7789v_display).update();
+
+          for (int frame = 0; frame < 28; ++frame) {
+            std::vector<Color> pixels(7, Color(0, 0, 32));  // dim blue base
+            int l = frame % 7;
+            for (int offset = 0; offset < 4; ++offset) {
+              int idxp = (l + offset) % 7;
+              int idxn = (l - offset + 7) % 7;
+              uint8_t intensity = 32 + offset * 32; // 32, 64, 96, 128
+              pixels[idxp] = Color(0, 0, intensity);
+              pixels[idxn] = Color(0, 0, intensity);
+            }
+            id(ring_leds).state = pixels;
+            id(ring_leds).update_internal_();
+            delay(50);
+          }
+
+      - lambda: |-
+          std::vector<Color> pixels(7, Color(0, 0, 0));
+          id(ring_leds).state = pixels;
+          id(ring_leds).update_internal_();
+
+spi:
+  - id: display_spi
+    clk_pin: GPIO12
+    mosi_pin: GPIO11
+  - id: apa102_spi
+    clk_pin: GPIO45
+    mosi_pin: GPIO42
+
+display:
+  - platform: st7789v
+    model: LILYGO_T-EMBED_170X320
+    id: st7789v_display
+    spi_id: display_spi
+    cs_pin: GPIO10
+    dc_pin: GPIO13
+    reset_pin: GPIO9
+    backlight_pin: GPIO15
+    rotation: 90
+    lambda: |-
+      if (id(menu_page) == 1) {
+        id(custom_ble_list_display).draw(it);
+      } else {
+        it.printf(10, 10, id(main_font), "Press BLE in menu!");
+      }
+
+light:
+  - platform: spi_led_strip
+    id: ring_leds
+    name: "Ring LEDs"
+    spi_id: apa102_spi
+    num_leds: 7
+    restore_mode: ALWAYS_OFF
+
+sensor:
+  - platform: rotary_encoder
+    id: encoder
+    pin_a: GPIO2
+    pin_b: GPIO1
+    min_value: 0
+    max_value: 50
+    on_clockwise:
+      then:
+        - lambda: |-
+            if (id(menu_page) == 1) {
+              id(custom_ble_list_display)->scroll(+1);
+            } else {
+              menu_main_menu.next();
+            }
+    on_anticlockwise:
+      then:
+        - lambda: |-
+            if (id(menu_page) == 1) {
+              id(custom_ble_list_display)->scroll(-1);
+            } else {
+              menu_main_menu.previous();
+            }
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      inverted: true
+    name: "Encoder Button"
+    on_press:
+      then:
+        - script.execute: beep_script
+        - lambda: |-
+            if (id(menu_page) == 0) {
+              menu_main_menu.select();
+            } else if (id(menu_page) == 1) {
+              id(menu_page) = 0;
+            }
+
+graphical_display_menu:
+  id: menu_main_menu
+  display: st7789v_display
+  font: main_font
+  items:
+    - type: menu
+      text: "Settings"
+      items:
+        - type: switch
+          text: "Sound"
+          switch: sound_on_off
+        - type: number
+          text: "Volume"
+          number: volume_setting
+        - type: back
+          text: "Back"
+    - type: menu
+      text: "BLE"
+      on_enter:
+        then:
+          - lambda: |-
+              id(menu_page) = 1;
+      items:
+        - type: back
+          text: "Back"
+    - type: menu
+      text: "Riego"
+      items:
+        - type: menu
+          text: "FrontLawn"
+          items:
+            - type: menu
+              text: "Start"
+              on_enter:
+                then:
+                  - lambda: |-
+                      id(start_frontlawn).press();
+              items:
+                - type: back
+                  text: "Back"
+            - type: number
+              text: "Delay"
+              number: frontlawn_delay
+            - type: menu
+              text: "Apply Delay"
+              on_enter:
+                then:
+                  - lambda: |-
+                      id(delay_frontlawn).press();
+              items:
+                - type: back
+                  text: "Back"
+            - type: back
+              text: "Back"
+        - type: menu
+          text: "BackLawn"
+          items:
+            - type: menu
+              text: "Start"
+              on_enter:
+                then:
+                  - lambda: |-
+                      id(start_backlawn).press();
+              items:
+                - type: back
+                  text: "Back"
+            - type: number
+              text: "Delay"
+              number: backlawn_delay
+            - type: menu
+              text: "Apply Delay"
+              on_enter:
+                then:
+                  - lambda: |-
+                      id(delay_backlawn).press();
+              items:
+                - type: back
+                  text: "Back"
+            - type: back
+              text: "Back"
+        - type: back
+          text: "Back"
+
+button:
+  - platform: template
+    name: "FrontLawn Start"
+    id: start_frontlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.start_frontlawn
+  - platform: template
+    name: "BackLawn Start"
+    id: start_backlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.start_backlawn
+  - platform: template
+    name: "FrontLawn Delay"
+    id: delay_frontlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.delay_frontlawn
+            data:
+              hours: !lambda 'return id(frontlawn_delay).state;'
+  - platform: template
+    name: "BackLawn Delay"
+    id: delay_backlawn
+    on_press:
+      then:
+        - homeassistant.service:
+            service: script.delay_backlawn
+            data:
+              hours: !lambda 'return id(backlawn_delay).state;'
