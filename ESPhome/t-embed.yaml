@@ -44,7 +44,7 @@ font:
     size: 18
 
 custom_ble_list_display:
-  id: custom_ble_list_display
+  id: my_ble_list_display
   font_id: main_font
   display_id: st7789v_display
 
