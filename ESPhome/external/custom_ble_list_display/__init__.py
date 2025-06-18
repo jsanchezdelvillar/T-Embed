@@ -10,13 +10,16 @@ CustomBLEListDisplay = custom_ble_list_display_ns.class_(
     'CustomBLEListDisplay', cg.Component
 )
 
-Font = cg.esphome_ns.class_('Font')
-DisplayBuffer = cg.esphome_ns.class_('DisplayBuffer')
+# Import correct types
+font_ns = cg.esphome_ns.namespace('font')
+st7789v_ns = cg.esphome_ns.namespace('st7789v')
+Font = font_ns.class_('Font')
+ST7789V = st7789v_ns.class_('ST7789V')
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(CustomBLEListDisplay),
     cv.Required(CONF_FONT_ID): cv.use_id(Font),
-    cv.Required(CONF_DISPLAY_ID): cv.use_id(DisplayBuffer),
+    cv.Required(CONF_DISPLAY_ID): cv.use_id(ST7789V),
 })
 
 async def to_code(config):
